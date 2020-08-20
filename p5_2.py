@@ -63,7 +63,7 @@ def calc_t(y_data, y_vocab):
     
     return f_score
 
-def calc_new(x_data, y_data, y_vocab):
+def calc_new(x_data, y_data, x_vocab, y_vocab):
     count_numerator = []
     for x_instance, y_instance in zip(x_data, y_data):
         for x, y_prev, y in zip(x_instance, ['START'] + y_instance[:-1], y_instance):
@@ -71,10 +71,19 @@ def calc_new(x_data, y_data, y_vocab):
     count_numerator = Counter(count_numerator)
     count_denom = Counter([ y for y_instance in y_data for y in ['START'] + y_instance[:-1] ])
     
+    # f_score = {}
+    # for (y_prev,y,x), numerator in dict(count_numerator).items():
+    #     feature = f"transition:{y_prev}+{y}+{x}"
+    #     f_score[feature] = np.log( numerator  /  count_denom[y_prev])
     f_score = {}
-    for (y_prev,y,x), numerator in dict(count_numerator).items():
-        feature = f"transition:{y_prev}+{y}+{x}"
-        f_score[feature] = np.log( numerator  /  count_denom[y_prev])
+    for y_prev in ['START'] + y_vocab:
+        for y in y_vocab:
+            for x in x_vocab:
+                feature = f"transition:{y_prev}+{y}+{x}"
+                if (y_prev, y, x) not in count_numerator:
+                    f_score[feature] = ninf
+                else:
+                    score = np.log(count_numerator[(y_prev, y, x)] / count_denom[y_prev])
     
     return f_score
 
@@ -89,12 +98,13 @@ def compute_score(x_instance, x_instance_pos, y_instance, feature_dict):
         feature_count[f"transition:{y_prev}+{y}"] += 1
     for y_prev, y, x in zip( ['START']+ y_instance[:-1], y_instance, x_instance ):
         feature_count[f"transition:{y_prev}+{y}+{x}"] += 1
-    score = 0
-    for feat, count in feature_count.items():
-        if feat in feature_dict:
-            score += feature_dict[feat]*count
-        else:
-            score += ninf*count
+    # score = 0
+    # for feat, count in feature_count.items():
+    #     if feat in feature_dict:
+    #         score += feature_dict[feat]*count
+    #     else:
+    #         score += ninf*count
+    score = sum([feature_dict[feat]*count for feat, count in feature_count.items()])
     return score
 
 
@@ -257,7 +267,7 @@ def forward_backward(x_instance, x_instance_pos, y_vocab, feature_dict):
                 e_score_pos = feature_dict.get(f"emission:{y}+{x_instance_pos[i]}", ninf)
                 new_feature = f"transition:{y}+{y_next}+{x_instance[i+1]}"
                 new_score = feature_dict.get(new_feature, ninf)
-                prob = np.exp(f_scores[i, y_i] + b_scores[i+1, y_next_i] + t_score + e_score + e_score_pos - alpha)
+                prob = np.exp(f_scores[i, y_i] + b_scores[i+1, y_next_i] + t_score + e_score + e_score_pos + new_score - alpha)
                 feature_expected_count[t_feature] += prob 
                 feature_expected_count[new_feature] += prob
 
@@ -344,7 +354,7 @@ if __name__ == "__main__":
     e_dict = calc_e(x_data, y_data, x_vocab, y_vocab)
     e_dict_pos = calc_e(x_data_pos, y_data, x_vocab_pos, y_vocab)
     t_dict = calc_t(y_data, y_vocab)
-    n_dict = calc_new(x_data, y_data, y_vocab)
+    n_dict = calc_new(x_data, y_data, x_vocab, y_vocab)
     feature_dict = {**t_dict, **e_dict, **e_dict_pos, **n_dict}
 
     y_preds = inference(full_dir/'dev.in', y_vocab, feature_dict, full_dir/'dev.p2.out')

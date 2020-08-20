@@ -191,7 +191,7 @@ def loss_fn_instance(x_instance, x_instance_pos, y_instance, feature_dict, y_voc
     return forward_score - first_term
 
 
-def backward(x_instance, x_instance_pos, y_vocab, feature_dict, aggreg_fn=logsumexp):
+def backward(x_instance, x_instance_pos, y_vocab, feature_dict):
     n, d = len(x_instance), len(y_vocab)
     scores = np.zeros( (n,d) )
     
@@ -210,14 +210,14 @@ def backward(x_instance, x_instance_pos, y_vocab, feature_dict, aggreg_fn=logsum
                 e_score_pos = feature_dict.get( f"emission:{y}+{x_instance_pos[i-1]}", ninf) 
                 new_score = feature_dict.get( f"transition:{y}+{y_next}+{x_instance[i]}", ninf)
                 temp.append(e_score + e_score_pos + t_score + new_score + scores[i, y_next_i])
-            scores[i-1, y_i] = aggreg_fn(np.array(temp))
+            scores[i-1, y_i] = logsumexp(np.array(temp))
             
     temp = []
     for i, y_next in enumerate(y_vocab):
         t_score = feature_dict.get( f"transition:START+{y_next}")
         new_score = feature_dict.get( f"transition:START+{y_next}+{x_instance[0]}", ninf)
         temp.append(t_score + new_score + scores[0, i])
-    beta = aggreg_fn(np.array(temp))
+    beta = logsumexp(np.array(temp))
     
     return scores, beta
 
@@ -258,7 +258,7 @@ def forward_backward(x_instance, x_instance_pos, y_vocab, feature_dict):
                 e_score_pos = feature_dict.get(f"emission:{y}+{x_instance_pos[i]}", ninf)
                 new_feature = f"transition:{y}+{y_next}+{x_instance[i+1]}"
                 new_score = feature_dict.get(new_feature, ninf)
-                prob = np.exp(f_scores[i, y_i] + b_scores[i+1, y_next_i] + t_score + e_score + e_score_pos - alpha)
+                prob = np.exp(f_scores[i, y_i] + b_scores[i+1, y_next_i] + t_score + e_score + e_score_pos + new_score - alpha)
                 feature_expected_count[t_feature] += prob 
                 feature_expected_count[new_feature] += prob
 
@@ -360,7 +360,7 @@ if __name__ == "__main__":
 
 
     # Initialization
-    init_weight = np.zeros(len(feature_dict))
+    init_weight = np.random.random(len(feature_dict))
     feature_dict = numpy_to_dict(init_weight, feature_dict)
     
     
