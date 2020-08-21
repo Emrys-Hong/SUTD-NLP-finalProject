@@ -143,7 +143,7 @@ def main():
                       bert_model_name= bert_model_name,
                       valid_dataloader= valid_dataloader,
                       dev=conf.device,
-                      num_labels=len(label_map),
+                      num_labels=len(label_map))
     else:
         print(f"Testing the model now.")
         model = BertForTokenClassification.from_pretrained(bert_model_name)
