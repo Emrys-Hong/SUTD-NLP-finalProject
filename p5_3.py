@@ -63,7 +63,7 @@ def calc_t(y_data, y_vocab):
     
     return f_score
 
-def calc_new(x_data, y_data, y_vocab):
+def calc_new(x_data, y_data, x_vocab, y_vocab):
     count_numerator = []
     for x_instance, y_instance in zip(x_data, y_data):
         for x, y_prev, y in zip(x_instance, ['START'] + y_instance[:-1], y_instance):
@@ -72,9 +72,14 @@ def calc_new(x_data, y_data, y_vocab):
     count_denom = Counter([ y for y_instance in y_data for y in ['START'] + y_instance[:-1] ])
     
     f_score = {}
-    for (y_prev,y,x), numerator in dict(count_numerator).items():
-        feature = f"transition:{y_prev}+{y}+{x}"
-        f_score[feature] = np.log( numerator  /  count_denom[y_prev])
+    for y_prev in ['START'] + y_vocab:
+        for y in y_vocab:
+            for x in x_vocab:
+                feature = f"transition:{y_prev}+{y}+{x}"
+                if (y_prev, y, x) not in count_numerator:
+                    f_score[feature] = ninf
+                else:
+                    f_score[feature] = np.log(count_numerator[(y_prev, y, x)] / count_denom[y_prev])
     
     return f_score
 
@@ -89,12 +94,7 @@ def compute_score(x_instance, x_instance_pos, y_instance, feature_dict):
         feature_count[f"transition:{y_prev}+{y}"] += 1
     for y_prev, y, x in zip( ['START']+ y_instance[:-1], y_instance, x_instance ):
         feature_count[f"transition:{y_prev}+{y}+{x}"] += 1
-    score = 0
-    for feat, count in feature_count.items():
-        if feat in feature_dict:
-            score += feature_dict[feat]*count
-        else:
-            score += ninf*count
+    score = sum([feature_dict[feat]*count for feat, count in feature_count.items()])
     return score
 
 
@@ -151,7 +151,7 @@ def inference(in_file_path, y_vocab, feature_dict, out_file_path):
 
 
 def logsumexp(a):
-    return np.max(a) 
+    return np.max(a)
 
 def forward(x_instance, x_instance_pos, y_vocab, feature_dict):
     n, d = len(x_instance), len(y_vocab)
@@ -191,7 +191,7 @@ def loss_fn_instance(x_instance, x_instance_pos, y_instance, feature_dict, y_voc
     return forward_score - first_term
 
 
-def backward(x_instance, x_instance_pos, y_vocab, feature_dict):
+def backward(x_instance, x_instance_pos, y_vocab, feature_dict, aggreg_fn=logsumexp):
     n, d = len(x_instance), len(y_vocab)
     scores = np.zeros( (n,d) )
     
@@ -210,14 +210,14 @@ def backward(x_instance, x_instance_pos, y_vocab, feature_dict):
                 e_score_pos = feature_dict.get( f"emission:{y}+{x_instance_pos[i-1]}", ninf) 
                 new_score = feature_dict.get( f"transition:{y}+{y_next}+{x_instance[i]}", ninf)
                 temp.append(e_score + e_score_pos + t_score + new_score + scores[i, y_next_i])
-            scores[i-1, y_i] = logsumexp(np.array(temp))
+            scores[i-1, y_i] = aggreg_fn(np.array(temp))
             
     temp = []
     for i, y_next in enumerate(y_vocab):
         t_score = feature_dict.get( f"transition:START+{y_next}")
         new_score = feature_dict.get( f"transition:START+{y_next}+{x_instance[0]}", ninf)
         temp.append(t_score + new_score + scores[0, i])
-    beta = logsumexp(np.array(temp))
+    beta = aggreg_fn(np.array(temp))
     
     return scores, beta
 
@@ -234,10 +234,8 @@ def forward_backward(x_instance, x_instance_pos, y_vocab, feature_dict):
         for y_i, y in enumerate(y_vocab):
             e_feature = f"emission:{y}+{x_instance[i]}"
             e_feature_pos = f"emission:{y}+{x_instance_pos[i]}"
-            e_score = feature_dict.get(e_feature, ninf) 
-            e_score_pos = feature_dict.get(e_feature_pos, ninf)
-            feature_expected_count[e_feature] += np.exp(f_scores[i, y_i] + b_scores[i, y_i] - e_score_pos - alpha)
-            feature_expected_count[e_feature_pos] += np.exp(f_scores[i, y_i] + b_scores[i, y_i] - e_score - alpha)
+            feature_expected_count[e_feature] += np.exp(f_scores[i, y_i] + b_scores[i, y_i] - alpha)
+            feature_expected_count[e_feature_pos] += np.exp(f_scores[i, y_i] + b_scores[i, y_i] - alpha)
     
     for i, y_next in enumerate(y_vocab):
         t_feature = f"transition:START+{y_next}"
@@ -323,6 +321,7 @@ def get_loss_grad(weight, *args):
     x_data, x_data_pos, y_data, feature_dict, y_vocab = args
     feature_dict = numpy_to_dict(weight, feature_dict)
     loss = loss_fn(x_data, x_data_pos, y_data, feature_dict, y_vocab, eta=0.1)
+    print(loss)
     grads = gradient_fn(x_data, x_data_pos, y_data, feature_dict, y_vocab, eta=0.1)
     grads = dict_to_numpy(grads, feature_dict)
     return loss, grads
@@ -345,7 +344,7 @@ if __name__ == "__main__":
     e_dict = calc_e(x_data, y_data, x_vocab, y_vocab)
     e_dict_pos = calc_e(x_data_pos, y_data, x_vocab_pos, y_vocab)
     t_dict = calc_t(y_data, y_vocab)
-    n_dict = calc_new(x_data, y_data, y_vocab)
+    n_dict = calc_new(x_data, y_data, x_vocab, y_vocab)
     feature_dict = {**t_dict, **e_dict, **e_dict_pos, **n_dict}
 
     y_preds = inference(full_dir/'dev.in', y_vocab, feature_dict, full_dir/'dev.p2.out')

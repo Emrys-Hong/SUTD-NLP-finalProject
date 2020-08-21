@@ -71,10 +71,6 @@ def calc_new(x_data, y_data, x_vocab, y_vocab):
     count_numerator = Counter(count_numerator)
     count_denom = Counter([ y for y_instance in y_data for y in ['START'] + y_instance[:-1] ])
     
-    # f_score = {}
-    # for (y_prev,y,x), numerator in dict(count_numerator).items():
-    #     feature = f"transition:{y_prev}+{y}+{x}"
-    #     f_score[feature] = np.log( numerator  /  count_denom[y_prev])
     f_score = {}
     for y_prev in ['START'] + y_vocab:
         for y in y_vocab:
@@ -83,7 +79,7 @@ def calc_new(x_data, y_data, x_vocab, y_vocab):
                 if (y_prev, y, x) not in count_numerator:
                     f_score[feature] = ninf
                 else:
-                    score = np.log(count_numerator[(y_prev, y, x)] / count_denom[y_prev])
+                    f_score[feature] = np.log(count_numerator[(y_prev, y, x)] / count_denom[y_prev])
     
     return f_score
 
@@ -98,12 +94,6 @@ def compute_score(x_instance, x_instance_pos, y_instance, feature_dict):
         feature_count[f"transition:{y_prev}+{y}"] += 1
     for y_prev, y, x in zip( ['START']+ y_instance[:-1], y_instance, x_instance ):
         feature_count[f"transition:{y_prev}+{y}+{x}"] += 1
-    # score = 0
-    # for feat, count in feature_count.items():
-    #     if feat in feature_dict:
-    #         score += feature_dict[feat]*count
-    #     else:
-    #         score += ninf*count
     score = sum([feature_dict[feat]*count for feat, count in feature_count.items()])
     return score
 
@@ -332,6 +322,7 @@ def get_loss_grad(weight, *args):
     x_data, x_data_pos, y_data, feature_dict, y_vocab = args
     feature_dict = numpy_to_dict(weight, feature_dict)
     loss = loss_fn(x_data, x_data_pos, y_data, feature_dict, y_vocab, eta=0.1)
+    print(loss)
     grads = gradient_fn(x_data, x_data_pos, y_data, feature_dict, y_vocab, eta=0.1)
     grads = dict_to_numpy(grads, feature_dict)
     return loss, grads
