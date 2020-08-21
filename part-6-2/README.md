@@ -5,9 +5,8 @@
 
 ## Train Bert Model
 
-You need at least one GPU to run the code/
-
 - `cd Bert_NER`
+- change the device in config.py to 'cpu' if you do not have a GPU
 - `python main.py`
 
 ## Train Flair + LSTM-CRF Model

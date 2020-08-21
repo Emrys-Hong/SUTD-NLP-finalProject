@@ -16,7 +16,7 @@ class Config:
         self.max_grad_norm = 1
 
         # training
-        self.device = torch.device("cuda:0")
+        self.device = torch.device("cuda:0") # change to 'cpu' if you do not have gpu
         self.num_epochs = 10
         self.seed = 0
 
